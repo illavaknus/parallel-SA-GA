@@ -18,8 +18,8 @@ if __name__ == '__main__':
 	filename = str(sys.argv[1])
 	
 	# read the data file and build the distance matrix
-	# dist_matrix = saga_utils.parse_xml_data(filename)
-	dist_matrix = tsa_data_create.tsa_data()
+	dist_matrix = saga_utils.parse_xml_data(filename)
+	# dist_matrix = tsa_data_create.tsa_data()
 
 	# set the number of cities and route
 	num_cities = len(dist_matrix)
@@ -45,7 +45,7 @@ if __name__ == '__main__':
 	step_count = 0
 	unchanged_count = 0
 
-	while(unchanged_count < 15):
+	while(unchanged_count < 1000):
 		# Boltzman 
 		shuffle_count = math.floor(math.sqrt(cur_temp))
 		# Fast
