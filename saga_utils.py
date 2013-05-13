@@ -4,19 +4,27 @@ import numpy as np
 def energy_distance(route, dist_matrix):
 	total_distance = 0
 	for i in range(len(route)):
-		total_distance += dist_matrix[route[i]][route[(i+1)%len(route)]]
+		# print dist_matrix[route[i]][route[(i+1)%len(route)]]
+		if i == len(route) - 1:
+			total_distance += dist_matrix[route[i]][route[0]]
+		else:
+			total_distance += dist_matrix[route[i]][route[(i+1)]]
 	return total_distance
 
 def shuffle_list(element_list, shuffle_count = None):
 	if(shuffle_count == None):
 		return np.random.shuffle(element_list)
 	else:
-		indices = np.random.randint(0,len(element_list), shuffle_count+1)
-		# print indices
-		for i in range(len(indices)):
-			# print indices[i], indices[(i+1)%shuffle_count]
-			# print element_list[indices[i]], element_list[indices[(i+1)%shuffle_count]]
-			element_list[indices[i]], element_list[indices[(i+1)%shuffle_count]] = element_list[indices[(i+1)%shuffle_count]], element_list[indices[i]]
+		assert(shuffle_count <= len(element_list))
+		i = 0
+		while i < shuffle_count:
+			index_one = np.random.randint(0,len(element_list))
+			index_two = np.random.randint(0,len(element_list))
+			if index_two == index_one:
+				i -= 1
+			else:
+				element_list[index_one], element_list[index_two] = element_list[index_two], element_list[index_one]
+				i += 1
 		return element_list
 
 
