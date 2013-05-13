@@ -4,7 +4,7 @@ SAGASolver : A class for solving SAGAProblems using SAGA.
 from mpi4py import MPI
 from random import randint, random, shuffle
 from copy import deepcopy
-from math import sqrt, exp, floor
+from math import sqrt, exp, floor, log, ceil
 from scipy.stats import mode
 from saga_utils import accumulate
 import numpy as numpy
@@ -24,17 +24,16 @@ class SAGASolver :
 		self.cur_energy = 0
 		self.best_state = None
 		self.best_energy = 0
-		self.optimized_steps = 0
 		self.total_steps = 0
 		self.all_energies = None
 		self.fitness = 0
 		self.max_generations = 10
-		self.prob_mutation = 0.2
+		self.prob_mutation = 0.01
 		self.prob_crossover = 0.5
 		self.mutation_delta = 0.01
 
 	def set_shuffle_count(self):
-		self.shuffle_count = floor(sqrt(self.cur_temp))
+		self.shuffle_count = ceil(sqrt(self.cur_temp))
 
 	def initialize(self, problem_object):
 		self.problem = deepcopy(problem_object)
@@ -45,15 +44,15 @@ class SAGASolver :
 		self.cur_temp = self.init_temp
 
 		self.reannealing_count = self.config_size * 20
-		self.all_energies = [0] * self.reannealing_count
+		self.all_energies = []
 
-	def binary_to_temp(binary):
+	def binary_to_temp(self, binary):
 		# If using 10^X bit encoding
 		# x_max = math.log(max_temp, 10)
 		# x_min = math.log(min_temp, 10)
 		# else
-		x_max = math.log(self.max_temp)
-		x_min = math.log(self.min_temp)
+		x_max = log(self.max_temp)
+		x_min = log(self.min_temp)
 
 		x_integer = sum([b*(2**(9-i)) for i,b in enumerate(binary)])
 		x = (x_integer/1023.0) * (x_max - x_min) + x_min
@@ -61,10 +60,10 @@ class SAGASolver :
 		# If using 10^X bit encoding
 		# temp = 10**x
 		# else
-		temp = math.exp(x)
+		temp = exp(x)
 		return temp
 
-	def temp_to_binary(temp):
+	def temp_to_binary(self, temp):
 		max_temp = 10000
 		min_temp = 0.01
 
@@ -72,10 +71,10 @@ class SAGASolver :
 		# x_max = math.log(max_temp, 10)
 		# x_min = math.log(min_temp, 10)
 		# else
-		x_max = math.log(self.max_temp)
-		x_min = math.log(self.min_temp)
+		x_max = log(self.max_temp)
+		x_min = log(self.min_temp)
 
-		x = math.log(temp)
+		x = log(temp)
 
 		x_integer = int(((x-x_min)/(x_max-x_min)) * 1023)
 		x_binary = [int(x) for x in list('{0:0b}'.format(x_integer))]
@@ -84,10 +83,10 @@ class SAGASolver :
 
 		return x_binary
 
-	def mutate(temp):
+	def mutate(self, temp):
 		x_binary = self.temp_to_binary(temp)
 		
-		ind = random.randint(0, 9)
+		ind = randint(0, 9)
 		# print x_binary
 		# print "Mutating index %d" % ind
 
@@ -99,7 +98,7 @@ class SAGASolver :
 		# print "After mutation"
 		# print x_binary
 
-		return binary_to_temp(x_binary)
+		return self.binary_to_temp(x_binary)
 
 	def reanneal(self, temp_values, fitness_values):
 		size = len(temp_values)
@@ -124,6 +123,8 @@ class SAGASolver :
 			# update variables
 			current_pop = deepcopy(new_pop)
 			current_fitness = sum([fitness_values[x] for x in current_pop])
+			if current_fitness == 0 :
+				print current_pop
 			scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
 			incremental_fitness = list(accumulate(scaled_fitness))
 			cur_generation += 1
@@ -157,58 +158,66 @@ class SAGASolver :
 		size = comm.Get_size()
 
 		self.cur_energy = self.problem.get_energy()
-		self.all_energies[0] = self.cur_energy
+		self.all_energies.append(self.cur_energy)
 
 		self.best_energy = self.cur_energy
 		self.best_state = self.problem.get_state()
 
-		while(not self.problem.criteria_fullfilled(self.optimized_steps, self.cur_energy)):
+		while(not self.problem.criteria_fullfilled(self.total_steps, self.cur_energy)):
 			self.set_shuffle_count()
 			new_candidate = self.problem.generate_candidates(self.shuffle_count)
 
-			delta_energy = new_candidate.get_energy() - self.best_energy
+			delta_energy = new_candidate.get_energy() - self.cur_energy
 
 			if (delta_energy < 0 or random() < exp(-delta_energy/self.cur_temp)):
 				# update current problem if new problem is accepted
 				self.cur_energy = new_candidate.get_energy()
 				self.problem = deepcopy(new_candidate)
-				self.all_energies[self.optimized_steps % self.reannealing_count] = self.cur_energy
-
-				self.optimized_steps += 1
+				# self.all_energies.append(self.cur_energy)
 
 				# update best state, if new energy is lower
 				if delta_energy < 0 :
 					self.best_energy = self.cur_energy
 					self.best_state = self.problem.get_state()
+					self.all_energies.append(self.cur_energy)
 
-				# reannea to get new temperature
-				if self.optimized_steps % self.reannealing_count == 0:
-					baseline_energy = sum(self.all_energies) / self.reannealing_count
-					fitness = sum([(baseline_energy - x) for x in self.all_energies if x < baseline_energy])
+			# reanneal to get new temperature
+			if self.total_steps % self.reannealing_count == 0:
+				# print "[",str(rank),"]: all_energies : ", self.all_energies
 
-					all_temps = [0] * size
-					all_fitness = [0] * size
+				all_energy_sums = comm.gather(sum(self.all_energies), root)
+				all_energy_counts = comm.gather(len(self.all_energies), root)
+				baseline_energy = 0
+				if rank == 0:
+					baseline_energy = sum(all_energy_sums)/sum(all_energy_counts)
+				baseline_energy = comm.bcast(baseline_energy, root)
 
-					comm.barrier()
+				fitness = 0
+				fitness = sum([(baseline_energy - x) for x in self.all_energies if x < baseline_energy])
+				# print "[",str(rank),"]: Fitness = ", fitness, ", baseline = ", baseline_energy
 
-					all_fitness = comm.gather(fitness, root)
-					all_temps = comm.gather(self.cur_temp, root)
+				all_temps = [0] * size
+				all_fitness = [0] * size
 
-					if rank == 0:
-						print "all fitness : ", all_fitness
-						print "all temps: ", all_temps
+				comm.barrier()
 
-					all_temps = comm.bcast(all_temps, root)
-					all_fitness = comm.bcast(all_fitness, root)
+				all_fitness = comm.gather(fitness, root)
+				all_temps = comm.gather(self.cur_temp, root)
 
-					self.cur_temp = self.reanneal(all_temps, all_fitness)
+				if rank == 0:
+					print "all fitness : ", all_fitness
+					print "all temps: ", all_temps
+
+				all_temps = comm.bcast(all_temps, root)
+				all_fitness = comm.bcast(all_fitness, root)
+
+				self.cur_temp = self.reanneal(all_temps, all_fitness)
 
 				# reset all energies for the next set of annealings
-				all_energies = [0] * self.reannealing_count
+				self.all_energies = []
 
 			# update varaibles
 			self.total_steps += 1
-			# print self.total_steps, self.optimized_steps
 
 		print "[",str(rank),"]: Final Energy : ", self.best_energy
 
