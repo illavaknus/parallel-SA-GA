@@ -27,7 +27,7 @@ class SAGASolver :
 		self.total_steps = 0
 		self.all_energies = None
 		self.fitness = 0
-		self.max_generations = 10
+		self.max_generations = 1
 		self.prob_mutation = 0.01
 		self.prob_crossover = 0.5
 		self.mutation_delta = 0.01
@@ -109,6 +109,8 @@ class SAGASolver :
 		scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
 		incremental_fitness = list(accumulate(scaled_fitness))
 
+		# print current_fitness, scaled_fitness, incremental_fitness
+
 		cur_generation = 0
 		while(cur_generation < self.max_generations):
 			new_pop = []
@@ -117,14 +119,15 @@ class SAGASolver :
 			for i in current_pop :
 				rand = random()
 				# print rand
-				new_pop.append(next(x[0] for x in enumerate(incremental_fitness) if x[1] > rand))
+				for i in range(len(incremental_fitness)):
+					if rand < incremental_fitness[i]: break
+				new_pop.append(current_pop[i-1])
 				# print new_pop
 			
 			# update variables
 			current_pop = deepcopy(new_pop)
 			current_fitness = sum([fitness_values[x] for x in current_pop])
-			if current_fitness == 0 :
-				print current_pop
+
 			scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
 			incremental_fitness = list(accumulate(scaled_fitness))
 			cur_generation += 1
