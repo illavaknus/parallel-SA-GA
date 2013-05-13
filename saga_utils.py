@@ -4,8 +4,9 @@ import numpy as np
 def accumulate(list_):
 	sum_ = 0
 	for x in list_:
-		sum_ += x
 		yield sum_
+		sum_ += x
+	yield sum_
 
 def energy_distance(route, dist_matrix):
 	total_distance = 0

@@ -24,13 +24,12 @@ class SAGASolver :
 		self.cur_energy = 0
 		self.best_state = None
 		self.best_energy = 0
-		self.total_steps = 0
+		self.total_steps = 1
 		self.all_energies = None
 		self.fitness = 0
 		self.max_generations = 1
 		self.prob_mutation = 0.01
-		self.prob_crossover = 0.5
-		self.mutation_delta = 0.01
+		self.prob_crossover = 0.1
 
 	def set_shuffle_count(self):
 		self.shuffle_count = ceil(sqrt(self.cur_temp))
@@ -133,16 +132,16 @@ class SAGASolver :
 			cur_generation += 1
 
 		# print new_pop
+		#print fitness_values
+		#print scaled_fitness
 		new_temp = temp_values[int(mode(new_pop)[0][0])]
 
 		# crossover
-		'''if random() < self.prob_crossover :
-		'''
+		# if random() < self.prob_crossover :
+		
 
 		# mutation
 		if random() < self.prob_mutation :
-			print "Mutating teperature:"
-			print new_temp
 			mutated_temp = self.mutate(new_temp)
 			print "Temperature mutated from %.5f to %.5f" % (new_temp, mutated_temp)
 			new_temp = mutated_temp
@@ -176,28 +175,34 @@ class SAGASolver :
 				# update current problem if new problem is accepted
 				self.cur_energy = new_candidate.get_energy()
 				self.problem = deepcopy(new_candidate)
-				# self.all_energies.append(self.cur_energy)
+				
 
 				# update best state, if new energy is lower
-				if delta_energy < 0 :
+				if new_candidate.get_energy() < self.best_energy :
 					self.best_energy = self.cur_energy
 					self.best_state = self.problem.get_state()
-					self.all_energies.append(self.cur_energy)
+					#self.all_energies.append(self.cur_energy)
+			
+			self.all_energies.append(self.cur_energy)
 
 			# reanneal to get new temperature
 			if self.total_steps % self.reannealing_count == 0:
-				# print "[",str(rank),"]: all_energies : ", self.all_energies
+				#print "[",str(rank),"]: all_energies : ", self.all_energies
 
 				all_energy_sums = comm.gather(sum(self.all_energies), root)
 				all_energy_counts = comm.gather(len(self.all_energies), root)
 				baseline_energy = 0
 				if rank == 0:
 					baseline_energy = sum(all_energy_sums)/sum(all_energy_counts)
+					print "Baseline Energy: %.5f" % baseline_energy
 				baseline_energy = comm.bcast(baseline_energy, root)
 
 				fitness = 0
-				fitness = sum([(baseline_energy - x) for x in self.all_energies if x < baseline_energy])
-				# print "[",str(rank),"]: Fitness = ", fitness, ", baseline = ", baseline_energy
+				eks = [(baseline_energy - x) for x in self.all_energies if x < baseline_energy]
+				fitness = sum(eks)
+				# fitness = sum([(baseline_energy - x) for x in self.all_energies if x < baseline_energy])
+				print "[",str(rank),"]: Temperature = %.5f Fitness = %.5f Best Energy %.5f EK-length %d" % (self.cur_temp, fitness, self.best_energy, len(eks))
+				#print "[",str(rank),"]: Energies: ", self.all_energies
 
 				all_temps = [0] * size
 				all_fitness = [0] * size
@@ -207,9 +212,9 @@ class SAGASolver :
 				all_fitness = comm.gather(fitness, root)
 				all_temps = comm.gather(self.cur_temp, root)
 
-				if rank == 0:
-					print "all fitness : ", all_fitness
-					print "all temps: ", all_temps
+				# if rank == 0:
+				# 	for i in range(len(all_fitness)):
+				# 		print "Temp %.2f has fitness-> %.2f |" % (all_temps[i], all_fitness[i])
 
 				all_temps = comm.bcast(all_temps, root)
 				all_fitness = comm.bcast(all_fitness, root)
