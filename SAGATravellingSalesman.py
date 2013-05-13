@@ -1,4 +1,4 @@
-import SAGAProblem
+from SAGAProblem import SAGAProblem
 import math
 import random
 import numpy as np
@@ -10,16 +10,19 @@ to be solved by SAGASolver using parallel SAGASolver
 """
 
 class SAGATravellingSalesman(SAGAProblem):
-	
+
 	"""
 	Instantiate a new SAGAProblem object
 	"""
-	def __init__(self, cities_list, dist_mat):
-		self._route = cities_list
-		self._dist_mat = dist_mat
-		self._num_cities = len(cities_list)
+	def __init__(self, route, dist_mat):
+		assert (route != None)
+		assert(dist_mat != None)
+
+		self._dist_mat = deepcopy(dist_mat)
+		self._num_cities = len(dist_mat)
+		self._route = deepcopy(route)
 		self._energy = 0
-		self._max_iterations = 20 * num_cities
+		self._max_iterations = 160 * 20 * self._num_cities
 
 	"""
 	Calculates the energy of the SAGAProblem
@@ -27,11 +30,11 @@ class SAGATravellingSalesman(SAGAProblem):
 	def get_energy(self):
 		total_distance = 0
 		for i in range(self._num_cities):
-			# print self.dist_matrix[route[i]][route[(i+1)%self._num_cities]]
-			if i == len(route) - 1:
-				total_distance += self.dist_matrix[route[i]][route[0]]
+			# print self.dist_matrix[self._route[i]][self._route[(i+1)%self._num_cities]]
+			if i == self._num_cities - 1:
+				total_distance += self._dist_mat[self._route[i]][self._route[0]]
 			else:
-				total_distance += self.dist_matrix[route[i]][route[(i+1)]]
+				total_distance += self._dist_mat[self._route[i]][self._route[(i+1)]]
 		self._energy = total_distance
 		return self._energy
 	
@@ -41,7 +44,7 @@ class SAGATravellingSalesman(SAGAProblem):
 	"""
 	def generate_candidates(self, L):
 		new_route = deepcopy(self._route)
-		new_dist_mat = deepcopy(self.dist_matrix)
+		new_dist_mat = deepcopy(self._dist_mat)
 
 		if(L == None):
 			new_route = np.random.shuffle(new_route)
@@ -57,7 +60,7 @@ class SAGATravellingSalesman(SAGAProblem):
 					new_route[index_one], new_route[index_two] = new_route[index_two], new_route[index_one]
 					i += 1
 		
-		return SAGATravellingSalesman(np.random.shuffle(new_route), new_dist_mat)
+		return SAGATravellingSalesman(new_route, new_dist_mat)
 	
 	"""
 	Returns true if the criteria for solving the
@@ -65,3 +68,9 @@ class SAGATravellingSalesman(SAGAProblem):
 	"""
 	def criteria_fullfilled(self, iteration, energy):
 		return (iteration >= self._max_iterations)
+
+	def get_size(self):
+		return self._num_cities
+
+	def get_state(self):
+		return self._route
