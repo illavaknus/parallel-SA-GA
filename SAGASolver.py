@@ -28,7 +28,7 @@ class SAGASolver :
 		self.all_energies = None
 		self.fitness = 0
 		self.max_generations = 1
-		self.prob_mutation = 0.01
+		self.prob_mutation = 0.1
 		self.prob_crossover = 0.1
 
 	def set_shuffle_count(self):
@@ -82,6 +82,28 @@ class SAGASolver :
 
 		return x_binary
 
+	def crossover(self, temp1, temp2):
+		x1_binary = self.temp_to_binary(temp1)
+		x2_binary = self.temp_to_binary(temp2)
+
+		# print "Before crossover"
+		# print x1_binary
+		# print x2_binary
+
+		ind = randint(0, 9)
+		# print "Crossing over index %d" % ind
+
+		x1_end = x1_binary[ind:][0]
+		x2_end = x2_binary[ind:][0]
+
+		x1_binary[ind] = x2_end
+		x2_binary[ind] = x1_end
+
+		# print "After crossover"
+		# print x1_binary
+		# print x2_binary
+		return self.binary_to_temp(x1_binary)
+
 	def mutate(self, temp):
 		x_binary = self.temp_to_binary(temp)
 		
@@ -131,13 +153,16 @@ class SAGASolver :
 			incremental_fitness = list(accumulate(scaled_fitness))
 			cur_generation += 1
 
-		# print new_pop
-		#print fitness_values
-		#print scaled_fitness
-		new_temp = temp_values[int(mode(new_pop)[0][0])]
+		new_index = int(mode(new_pop)[0][0])
+		new_temp = temp_values[new_index]
 
-		# crossover
-		# if random() < self.prob_crossover :
+		if random() < self.prob_crossover :
+			crossed_index = randint(0,len(new_pop)-1)
+			while crossed_index == new_index:
+				crossed_index = randint(0,len(new_pop)-1)
+			crossed_temp = temp_values[crossed_index]
+			newcrossed_temp = self.crossover(new_temp,crossed_temp)
+			print "Temperature crossed over from %.5f to %.5f" % (new_temp, newcrossed_temp)
 		
 
 		# mutation
