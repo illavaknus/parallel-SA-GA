@@ -47,6 +47,60 @@ class SAGASolver :
 		self.reannealing_count = self.config_size * 20
 		self.all_energies = [0] * self.reannealing_count
 
+	def binary_to_temp(binary):
+		# If using 10^X bit encoding
+		# x_max = math.log(max_temp, 10)
+		# x_min = math.log(min_temp, 10)
+		# else
+		x_max = math.log(self.max_temp)
+		x_min = math.log(self.min_temp)
+
+		x_integer = sum([b*(2**(9-i)) for i,b in enumerate(binary)])
+		x = (x_integer/1023.0) * (x_max - x_min) + x_min
+		
+		# If using 10^X bit encoding
+		# temp = 10**x
+		# else
+		temp = math.exp(x)
+		return temp
+
+	def temp_to_binary(temp):
+		max_temp = 10000
+		min_temp = 0.01
+
+		# If using 10^X bit encoding
+		# x_max = math.log(max_temp, 10)
+		# x_min = math.log(min_temp, 10)
+		# else
+		x_max = math.log(self.max_temp)
+		x_min = math.log(self.min_temp)
+
+		x = math.log(temp)
+
+		x_integer = int(((x-x_min)/(x_max-x_min)) * 1023)
+		x_binary = [int(x) for x in list('{0:0b}'.format(x_integer))]
+		while len(x_binary) != 10:
+			x_binary.insert(0,0)
+
+		return x_binary
+
+	def mutate(temp):
+		x_binary = self.temp_to_binary(temp)
+		
+		ind = random.randint(0, 9)
+		# print x_binary
+		# print "Mutating index %d" % ind
+
+		if x_binary[ind] == 0:
+			x_binary[ind] = 1
+		else:
+			x_binary[ind] = 0
+
+		# print "After mutation"
+		# print x_binary
+
+		return binary_to_temp(x_binary)
+
 	def reanneal(self, temp_values, fitness_values):
 		size = len(temp_values)
 
@@ -82,7 +136,12 @@ class SAGASolver :
 		'''
 
 		# mutation
-		# if random() < self.prob_mutation :
+		if random() < self.prob_mutation :
+			print "Mutating teperature:"
+			print new_temp
+			mutated_temp = self.mutate(new_temp)
+			print "Temperature mutated from %.5f to %.5f" % (new_temp, mutated_temp)
+			new_temp = mutated_temp
 		# 	mutation = (-1 + random() * 2) * (self.mutation_delta * new_temp)
 		# 	# rand_index = random.randint(0,size)
 		# 	if mutation+new_temp < 0 :
