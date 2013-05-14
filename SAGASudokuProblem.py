@@ -105,6 +105,9 @@ class SAGASudokuProblem(SAGAProblem):
             result += str(self._data[i])
         print result
 
+    def get_size(self):
+        return self._N
+
     def _get_subgrid_indices(self, i):
         """
         Get the indices of the i'th subgrid. Subgrids are
