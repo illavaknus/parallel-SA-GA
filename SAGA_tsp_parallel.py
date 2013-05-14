@@ -36,17 +36,27 @@ if __name__ == '__main__':
 	# Broadcast the arrays
 	dist_matrix = comm.bcast(dist_matrix, root=0)
 
+	# Wait until data has been broadcast and then start the timer
+	comm.barrier()
+	if rank == 0:
+		start =  MPI.Wtime()
+
 	saga_tsp = SAGATravellingSalesman(saga_utils.shuffle_list(range(len(dist_matrix)), len(dist_matrix)), dist_matrix)
 	
 	saga_solver = SAGASolver()
 	saga_solver.initialize(saga_tsp)
 
-	if(rank == 0):
-		print "["+str(rank)+"]: Distributed data of size : ", len(dist_matrix)
+	# if(rank == 0):
+	# 	print "["+str(rank)+"]: Distributed data of size : ", len(dist_matrix)
 
-	if (rank != 0):
-		print "["+str(rank)+"]: Received data of size : ", len(dist_matrix)
+	# if (rank != 0):
+	# 	print "["+str(rank)+"]: Received data of size : ", len(dist_matrix)
 
-	saga_solver.run_annealing(comm, 0)
+	saga_solver.solve(comm, start, 0)
+
+	# Stop the time and print the total run time
+	# if rank == 0:
+	# 	stop = MPI.Wtime()
+	# 	print "Running time: %.5f" % (stop - start)
 
 

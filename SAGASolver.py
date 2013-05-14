@@ -11,6 +11,12 @@ import numpy as numpy
 import sys
 import SAGAProblem
 
+"""
+Defines for configurations
+"""
+__TEMP_CODING__ = 1 	# 0 : 10^X, 1 : exponential
+__PARALLEL__ = 1 		# 1 : parallel with GA, 0 : serial without GA
+
 class SAGASolver :
 	def __init__(self) :
 		"""TODO: Set better default values """
@@ -22,8 +28,7 @@ class SAGASolver :
 		self.reannealing_count = 100
 		self.cur_temp = self.init_temp
 		self.cur_energy = 0
-		self.best_state = None
-		self.best_energy = 0
+		self.best_solution = None
 		self.total_steps = 1
 		self.all_energies = None
 		self.fitness = 0
@@ -42,24 +47,27 @@ class SAGASolver :
 		self.init_temp = self.min_temp + random() * (self.max_temp - self.min_temp)
 		self.cur_temp = self.init_temp
 
-		self.reannealing_count = self.config_size * 20
+		self.reannealing_count = self.config_size * 2
 		self.all_energies = []
 
 	def binary_to_temp(self, binary):
 		# If using 10^X bit encoding
-		# x_max = math.log(max_temp, 10)
-		# x_min = math.log(min_temp, 10)
-		# else
-		x_max = log(self.max_temp)
-		x_min = log(self.min_temp)
+		if __TEMP_CODING__ == 0 :
+			x_max = log(self.max_temp, 10)
+			x_min = log(self.min_temp, 10)
+		# else using exponential
+		else :
+			x_max = log(self.max_temp)
+			x_min = log(self.min_temp)
 
 		x_integer = sum([b*(2**(9-i)) for i,b in enumerate(binary)])
 		x = (x_integer/1023.0) * (x_max - x_min) + x_min
 		
 		# If using 10^X bit encoding
-		# temp = 10**x
-		# else
-		temp = exp(x)
+		if __TEMP_CODING__ == 0:
+			temp = 10**x
+		else:
+			temp = exp(x)
 		return temp
 
 	def temp_to_binary(self, temp):
@@ -67,13 +75,14 @@ class SAGASolver :
 		min_temp = 0.01
 
 		# If using 10^X bit encoding
-		# x_max = math.log(max_temp, 10)
-		# x_min = math.log(min_temp, 10)
-		# else
-		x_max = log(self.max_temp)
-		x_min = log(self.min_temp)
-
-		x = log(temp)
+		if __TEMP_CODING__ == 0 :
+			x_max = log(self.max_temp, 10)
+			x_min = log(self.min_temp, 10)
+			x = log(temp, 10)
+		else :
+			x_max = log(self.max_temp)
+			x_min = log(self.min_temp)
+			x = log(temp)
 
 		x_integer = int(((x-x_min)/(x_max-x_min)) * 1023)
 		x_binary = [int(x) for x in list('{0:0b}'.format(x_integer))]
@@ -126,33 +135,25 @@ class SAGASolver :
 
 		current_pop = range(size)
 
-		current_fitness = sum([fitness_values[x] for x in current_pop])
-		scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
-		incremental_fitness = list(accumulate(scaled_fitness))
-
 		#print temp_values
 		#print fitness_values
 		#print current_fitness, scaled_fitness, incremental_fitness
 
 		cur_generation = 0
 		while(cur_generation < self.max_generations):
+			current_fitness = sum([fitness_values[x] for x in current_pop])
+			if current_fitness == 0 : current_fitness = 1
+			scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
+			incremental_fitness = list(accumulate(scaled_fitness))
+		
 			new_pop = []
-			# print current_pop, new_pop
-			# selection
+
 			for i in current_pop :
 				rand = random()
-				# print rand
 				for i in range(len(incremental_fitness)):
 					if rand < incremental_fitness[i]: break
 				new_pop.append(current_pop[i-1])
-				# print new_pop
-			
-			# update variables
-			# current_pop = deepcopy(new_pop)
-			# current_fitness = sum([fitness_values[x] for x in current_pop])
 
-			# scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
-			# incremental_fitness = list(accumulate(scaled_fitness))
 			cur_generation += 1
 
 		new_index = int(mode(new_pop)[0][0])
@@ -164,13 +165,13 @@ class SAGASolver :
 				crossed_index = randint(0,len(new_pop)-1)
 			crossed_temp = temp_values[crossed_index]
 			newcrossed_temp = self.crossover(new_temp,crossed_temp)
-			print "Temperature crossed over from %.5f to %.5f" % (new_temp, newcrossed_temp)
+			# print "Temperature crossed over from %.5f to %.5f" % (new_temp, newcrossed_temp)
 		
 
 		# mutation
 		if random() < self.prob_mutation :
 			mutated_temp = self.mutate(new_temp)
-			print "Temperature mutated from %.5f to %.5f" % (new_temp, mutated_temp)
+			# print "Temperature mutated from %.5f to %.5f" % (new_temp, mutated_temp)
 			new_temp = mutated_temp
 		# 	mutation = (-1 + random() * 2) * (self.mutation_delta * new_temp)
 		# 	# rand_index = random.randint(0,size)
@@ -182,15 +183,21 @@ class SAGASolver :
 		return new_temp
 
 
-	def run_annealing(self, comm, root = 0):
+	def solve(self, comm, start, root = 0):
 		rank = comm.Get_rank()
 		size = comm.Get_size()
+
+		# if run with only 1 process, switch to serial version
+		if size == 1 : 
+			__PARALLEL__ = 0
+			self.reannealing_count = 10
+		else:
+			__PARALLEL__ = 1
 
 		self.cur_energy = self.problem.get_energy()
 		self.all_energies.append(self.cur_energy)
 
-		self.best_energy = self.cur_energy
-		#self.best_state = self.problem.get_state()
+		self.best_solution = deepcopy(self.problem)
 
 		while(not self.problem.criteria_fulfilled(self.total_steps, self.cur_energy)):
 			self.set_shuffle_count()
@@ -201,61 +208,90 @@ class SAGASolver :
 			if (delta_energy < 0 or random() < exp(-delta_energy/self.cur_temp)):
 				# update current problem if new problem is accepted
 				self.cur_energy = new_candidate.get_energy()
-				self.problem = deepcopy(new_candidate)
-				
+				self.problem = deepcopy(new_candidate)				
 
-				# update best state, if new energy is lower
-				if new_candidate.get_energy() < self.best_energy :
-					self.best_energy = self.cur_energy
-					#self.best_state = self.problem.get_state()
-					#self.all_energies.append(self.cur_energy)
+				# update best solution, if new energy is lower
+				if new_candidate.get_energy() < self.best_solution.get_energy() :
+					self.best_solution = deepcopy(new_candidate)
 			
 			self.all_energies.append(self.cur_energy)
 
 			# reanneal to get new temperature
 			if self.total_steps % self.reannealing_count == 0:
-				#print "[",str(rank),"]: all_energies : ", self.all_energies
+				if __PARALLEL__ == 1 :
 
-				all_energy_sums = comm.gather(sum(self.all_energies), root)
-				all_energy_counts = comm.gather(len(self.all_energies), root)
-				baseline_energy = 0
-				if rank == 0:
-					baseline_energy = sum(all_energy_sums)/sum(all_energy_counts)
-					print "Baseline Energy: %.5f" % baseline_energy
-				baseline_energy = comm.bcast(baseline_energy, root)
+					all_energy_sums = comm.gather(sum(self.all_energies), root)
+					all_energy_counts = comm.gather(len(self.all_energies), root)
+					baseline_energy = 0
+					if rank == 0:
+						baseline_energy = sum(all_energy_sums)/sum(all_energy_counts)
+					baseline_energy = comm.bcast(baseline_energy, root)
 
-				fitness = 0
-				eks = [(baseline_energy - x) for x in self.all_energies if x < baseline_energy]
-				fitness = float(sum(eks))
-				# fitness = sum([(baseline_energy - x) for x in self.all_energies if x < baseline_energy])
-				print "[",str(rank),"]: Temperature = %.5f Fitness = %.5f Best Energy %.5f EK-length %d" % (self.cur_temp, fitness, self.best_energy, len(eks))
-				#print "[",str(rank),"]: Energies: ", self.all_energies
+					fitness = 0
+					eks = [(baseline_energy - x) for x in self.all_energies if x < baseline_energy]
+					fitness = float(sum(eks))
+					
+					all_temps = [0] * size
+					all_fitness = [0] * size
 
-				all_temps = [0] * size
-				all_fitness = [0] * size
+					comm.barrier()
 
-				comm.barrier()
+					all_fitness = comm.gather(fitness, root)
+					all_temps = comm.gather(self.cur_temp, root)
 
-				all_fitness = comm.gather(fitness, root)
-				all_temps = comm.gather(self.cur_temp, root)
+					# if rank == 0:
+					# 	for i in range(len(all_fitness)):
+					# 		print "Temp %.2f has fitness-> %.2f |" % (all_temps[i], all_fitness[i])
 
-				# if rank == 0:
-				# 	for i in range(len(all_fitness)):
-				# 		print "Temp %.2f has fitness-> %.2f |" % (all_temps[i], all_fitness[i])
+					all_temps = comm.bcast(all_temps, root)
+					all_fitness = comm.bcast(all_fitness, root)
 
-				all_temps = comm.bcast(all_temps, root)
-				all_fitness = comm.bcast(all_fitness, root)
+					self.cur_temp = self.reanneal(all_temps, all_fitness)
 
-				self.cur_temp = self.reanneal(all_temps, all_fitness)
+					# reset all energies for the next set of annealings
+					self.all_energies = []
 
-				# reset all energies for the next set of annealings
-				self.all_energies = []
+				# if running with only 1 process, switch to a serial verion
+				else:
+					self.cur_temp *= 0.9
+					if self.cur_temp < 1 : self.cur_temp = sqrt(self.max_temp)
 
-			# update varaibles
+			# update counter
 			self.total_steps += 1
 
-		#if rank == 0:
-		print self.problem.print_results()
-		comm.Abort()
-			#print "[",str(rank),"]: Final Energy : ", self.best_energy
+		# Print the results and exit if one process 
+		# exited loop before others
+		if self.best_solution.get_energy() == 0: 
+			# print "[",rank,"]: Got best energy of 0!"
+			self.best_solution.print_results()
+			stop = MPI.Wtime()
+			print "Running time: %.5f" % (stop - start)
+			print "EXITING! Don't worry!"
+			comm.Abort()
 
+		# Else choose the best solution and exit
+		else : 
+			if rank == 0:
+				solutions = []
+				solutions.append(self.best_solution)
+
+				# Get results from all other processes
+				for i in range(size-1):
+					status = MPI.Status()
+					solution = comm.recv(source=MPI.ANY_SOURCE,tag=MPI.ANY_TAG,status=status)
+					solutions.append(solution)
+
+				# Print the best solution
+				best_energy = solutions[0].get_energy()
+				best_solution = deepcopy(solutions[0])
+				for solution in solutions:
+					if best_energy > solution.get_energy():
+						best_energy = solution.get_energy()
+						best_solution = deepcopy(solution)
+
+				best_solution.print_results()
+				stop = MPI.Wtime()
+				print "Running time: %.5f" % (stop - start)
+			else :
+				comm.send(self.best_solution, dest = 0)
+				return

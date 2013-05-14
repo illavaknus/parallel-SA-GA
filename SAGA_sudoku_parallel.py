@@ -41,18 +41,11 @@ if __name__ == '__main__':
 	
 	# Wait until data has been broadcast and then start the timer
 	comm.barrier()
-	if rank == 0:
-		start =  MPI.Wtime()
+	start =  MPI.Wtime()
 
 	# Initialize the Sudoku and begin the algorithm
 	saga_sudoku = SAGASudokuProblem(data)
 	saga_solver = SAGASolver()
 	saga_solver.initialize(saga_sudoku)
-	saga_solver.run_annealing(comm, 0)
-
-	# Stop the time and print the total run time
-	if rank == 0:
-		stop = MPI.Wtime()
-		print "Running time: %.5f" % (start - stop)
-
+	saga_solver.solve(comm, start, 0)
 
