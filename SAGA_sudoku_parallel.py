@@ -6,6 +6,7 @@ import math
 import copy
 import saga_utils
 import numpy as np
+from math import sqrt
 from mpi4py import MPI
 from SAGAProblem import SAGAProblem
 from SAGASudokuProblem import SAGASudokuProblem
@@ -18,38 +19,40 @@ if __name__ == '__main__':
 	rank = comm.Get_rank()
 	size = comm.Get_size()
 
-	if(len(sys.argv) < 1):
-		print "usage : python SAGA_tsa_sudoku_parallel.py"
-		sys.exit(-1)
+	data = None
 
-	# if rank == 0:
-	# 	# read the filename from cmdline
-	# 	filename = str(sys.argv[1])
-		
-	# 	# read the data file and build the distance matrix
-	# 	dist_matrix = saga_utils.parse_xml_data(filename)
-	# 	# dist_matrix = tsa_data_create.tsa_data()
-	# else:
-	# 	dist_matrix = None
-
-	# comm.barrier()
-	# start =  MPI.Wtime()
+	# If a filename is passed, read the contents of the file into a data array
+	if rank == 0 and len(sys.argv) == 2:
+		try:
+			filename = str(sys.argv[1])
+			raw = np.loadtxt(filename, dtype="int")
+			data = raw.reshape(1,raw.size)[0]
+			n = int(sqrt(len(data)))
+			n_sqrt = int(sqrt(n))
+			if n != sqrt(len(data)) or n_sqrt != sqrt(n):
+			    print "Must pass in a NxN Sudoku where N is a perfect square"
+			    comm.Abort(-1)
+		except IOError as e:
+			print "Unable to load file"
+			comm.Abort(-1)
 	
-	# # Broadcast the arrays
-	# dist_matrix = comm.bcast(dist_matrix, root=0)
-
-	saga_sudoku = SAGASudokuProblem()
+	# Broadcast the data
+	data = comm.bcast(data, root=0)
 	
+	# Wait until data has been broadcast and then start the timer
+	comm.barrier()
+	if rank == 0:
+		start =  MPI.Wtime()
+
+	# Initialize the Sudoku and begin the algorithm
+	saga_sudoku = SAGASudokuProblem(data)
 	saga_solver = SAGASolver()
 	saga_solver.initialize(saga_sudoku)
-
-	# saga_sudoku.print(res)
-	# if(rank == 0):
-	# 	print "["+str(rank)+"]: Distributed data of size : ", len(dist_matrix)
-
-	# if (rank != 0):
-	# 	print "["+str(rank)+"]: Received data of size : ", len(dist_matrix)
-
 	saga_solver.run_annealing(comm, 0)
+
+	# Stop the time and print the total run time
+	if rank == 0:
+		stop = MPI.Wtime()
+		print "Running time: %.5f" % (start - stop)
 
 

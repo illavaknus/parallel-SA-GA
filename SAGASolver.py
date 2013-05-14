@@ -254,7 +254,8 @@ class SAGASolver :
 			# update varaibles
 			self.total_steps += 1
 
-		if rank == 0:
-			print self.problem.print_results()
+		#if rank == 0:
+		print self.problem.print_results()
+		comm.Abort()
 			#print "[",str(rank),"]: Final Energy : ", self.best_energy
 
