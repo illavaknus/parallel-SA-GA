@@ -16,7 +16,7 @@ class SAGASolver :
 		"""TODO: Set better default values """
 		# set default values
 		self.config_size = 0
-		self.min_temp =  0.1
+		self.min_temp =  0.01
 		self.max_temp = 10000
 		self.init_temp = self.min_temp + random() * self.max_temp
 		self.reannealing_count = 100
@@ -28,18 +28,18 @@ class SAGASolver :
 		self.all_energies = None
 		self.fitness = 0
 		self.max_generations = 1
-		self.prob_mutation = 0.01
+		self.prob_mutation = 0.1
 		self.prob_crossover = 0.1
 
 	def set_shuffle_count(self):
-		self.shuffle_count = ceil(sqrt(self.cur_temp))
+		self.shuffle_count = int(ceil(sqrt(self.cur_temp)))
 
 	def initialize(self, problem_object):
 		self.problem = deepcopy(problem_object)
 		self.config_size = self.problem.get_size()
 		
 		self.max_temp = self.config_size ** 2
-		self.init_temp = self.min_temp + random() * self.max_temp
+		self.init_temp = self.min_temp + random() * (self.max_temp - self.min_temp)
 		self.cur_temp = self.init_temp
 
 		self.reannealing_count = self.config_size * 20
@@ -82,6 +82,28 @@ class SAGASolver :
 
 		return x_binary
 
+	def crossover(self, temp1, temp2):
+		x1_binary = self.temp_to_binary(temp1)
+		x2_binary = self.temp_to_binary(temp2)
+
+		# print "Before crossover"
+		# print x1_binary
+		# print x2_binary
+
+		ind = randint(0, 9)
+		# print "Crossing over index %d" % ind
+
+		x1_end = x1_binary[ind:][0]
+		x2_end = x2_binary[ind:][0]
+
+		x1_binary[ind] = x2_end
+		x2_binary[ind] = x1_end
+
+		# print "After crossover"
+		# print x1_binary
+		# print x2_binary
+		return self.binary_to_temp(x1_binary)
+
 	def mutate(self, temp):
 		x_binary = self.temp_to_binary(temp)
 		
@@ -108,7 +130,9 @@ class SAGASolver :
 		scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
 		incremental_fitness = list(accumulate(scaled_fitness))
 
-		# print current_fitness, scaled_fitness, incremental_fitness
+		#print temp_values
+		#print fitness_values
+		#print current_fitness, scaled_fitness, incremental_fitness
 
 		cur_generation = 0
 		while(cur_generation < self.max_generations):
@@ -124,20 +148,23 @@ class SAGASolver :
 				# print new_pop
 			
 			# update variables
-			current_pop = deepcopy(new_pop)
-			current_fitness = sum([fitness_values[x] for x in current_pop])
+			# current_pop = deepcopy(new_pop)
+			# current_fitness = sum([fitness_values[x] for x in current_pop])
 
-			scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
-			incremental_fitness = list(accumulate(scaled_fitness))
+			# scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
+			# incremental_fitness = list(accumulate(scaled_fitness))
 			cur_generation += 1
 
-		# print new_pop
-		#print fitness_values
-		#print scaled_fitness
-		new_temp = temp_values[int(mode(new_pop)[0][0])]
+		new_index = int(mode(new_pop)[0][0])
+		new_temp = temp_values[new_index]
 
-		# crossover
-		# if random() < self.prob_crossover :
+		if random() < self.prob_crossover :
+			crossed_index = randint(0,len(new_pop)-1)
+			while crossed_index == new_index:
+				crossed_index = randint(0,len(new_pop)-1)
+			crossed_temp = temp_values[crossed_index]
+			newcrossed_temp = self.crossover(new_temp,crossed_temp)
+			print "Temperature crossed over from %.5f to %.5f" % (new_temp, newcrossed_temp)
 		
 
 		# mutation
@@ -163,11 +190,11 @@ class SAGASolver :
 		self.all_energies.append(self.cur_energy)
 
 		self.best_energy = self.cur_energy
-		self.best_state = self.problem.get_state()
+		#self.best_state = self.problem.get_state()
 
-		while(not self.problem.criteria_fullfilled(self.total_steps, self.cur_energy)):
+		while(not self.problem.criteria_fulfilled(self.total_steps, self.cur_energy)):
 			self.set_shuffle_count()
-			new_candidate = self.problem.generate_candidates(self.shuffle_count)
+			new_candidate = self.problem.generate_candidate(self.shuffle_count)
 
 			delta_energy = new_candidate.get_energy() - self.cur_energy
 
@@ -180,7 +207,7 @@ class SAGASolver :
 				# update best state, if new energy is lower
 				if new_candidate.get_energy() < self.best_energy :
 					self.best_energy = self.cur_energy
-					self.best_state = self.problem.get_state()
+					#self.best_state = self.problem.get_state()
 					#self.all_energies.append(self.cur_energy)
 			
 			self.all_energies.append(self.cur_energy)
@@ -199,7 +226,7 @@ class SAGASolver :
 
 				fitness = 0
 				eks = [(baseline_energy - x) for x in self.all_energies if x < baseline_energy]
-				fitness = sum(eks)
+				fitness = float(sum(eks))
 				# fitness = sum([(baseline_energy - x) for x in self.all_energies if x < baseline_energy])
 				print "[",str(rank),"]: Temperature = %.5f Fitness = %.5f Best Energy %.5f EK-length %d" % (self.cur_temp, fitness, self.best_energy, len(eks))
 				#print "[",str(rank),"]: Energies: ", self.all_energies
@@ -227,5 +254,8 @@ class SAGASolver :
 			# update varaibles
 			self.total_steps += 1
 
-		print "[",str(rank),"]: Final Energy : ", self.best_energy
+		#if rank == 0:
+		print self.problem.print_results()
+		comm.Abort()
+			#print "[",str(rank),"]: Final Energy : ", self.best_energy
 

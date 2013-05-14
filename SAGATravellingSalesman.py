@@ -42,7 +42,7 @@ class SAGATravellingSalesman(SAGAProblem):
 	Creates a new candidate by performing up to
 	L different swaps on the SAGAProblem
 	"""
-	def generate_candidates(self, L):
+	def generate_candidate(self, L):
 		new_route = deepcopy(self._route)
 		new_dist_mat = deepcopy(self._dist_mat)
 
@@ -66,7 +66,7 @@ class SAGATravellingSalesman(SAGAProblem):
 	Returns true if the criteria for solving the
 	SAGAProblem has been met 
 	"""
-	def criteria_fullfilled(self, iteration, energy):
+	def criteria_fulfilled(self, iteration, energy):
 		return (iteration >= self._max_iterations)
 
 	def get_size(self):
