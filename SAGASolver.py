@@ -28,8 +28,6 @@ class SAGASolver :
 		self.reannealing_count = 100
 		self.cur_temp = self.init_temp
 		self.cur_energy = 0
-		# self.best_state = None
-		# self.best_energy = 0
 		self.best_solution = None
 		self.total_steps = 1
 		self.all_energies = None
@@ -137,33 +135,25 @@ class SAGASolver :
 
 		current_pop = range(size)
 
-		current_fitness = sum([fitness_values[x] for x in current_pop])
-		scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
-		incremental_fitness = list(accumulate(scaled_fitness))
-
 		#print temp_values
 		#print fitness_values
 		#print current_fitness, scaled_fitness, incremental_fitness
 
 		cur_generation = 0
 		while(cur_generation < self.max_generations):
+			current_fitness = sum([fitness_values[x] for x in current_pop])
+			if current_fitness == 0 : current_fitness = 1
+			scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
+			incremental_fitness = list(accumulate(scaled_fitness))
+		
 			new_pop = []
-			# print current_pop, new_pop
-			# selection
+
 			for i in current_pop :
 				rand = random()
-				# print rand
 				for i in range(len(incremental_fitness)):
 					if rand < incremental_fitness[i]: break
 				new_pop.append(current_pop[i-1])
-				# print new_pop
-			
-			# update variables
-			# current_pop = deepcopy(new_pop)
-			# current_fitness = sum([fitness_values[x] for x in current_pop])
 
-			# scaled_fitness = [fitness_values[x]/current_fitness for x in current_pop]
-			# incremental_fitness = list(accumulate(scaled_fitness))
 			cur_generation += 1
 
 		new_index = int(mode(new_pop)[0][0])
@@ -175,13 +165,13 @@ class SAGASolver :
 				crossed_index = randint(0,len(new_pop)-1)
 			crossed_temp = temp_values[crossed_index]
 			newcrossed_temp = self.crossover(new_temp,crossed_temp)
-			print "Temperature crossed over from %.5f to %.5f" % (new_temp, newcrossed_temp)
+			# print "Temperature crossed over from %.5f to %.5f" % (new_temp, newcrossed_temp)
 		
 
 		# mutation
 		if random() < self.prob_mutation :
 			mutated_temp = self.mutate(new_temp)
-			print "Temperature mutated from %.5f to %.5f" % (new_temp, mutated_temp)
+			# print "Temperature mutated from %.5f to %.5f" % (new_temp, mutated_temp)
 			new_temp = mutated_temp
 		# 	mutation = (-1 + random() * 2) * (self.mutation_delta * new_temp)
 		# 	# rand_index = random.randint(0,size)
@@ -193,7 +183,7 @@ class SAGASolver :
 		return new_temp
 
 
-	def run_annealing(self, comm, root = 0):
+	def solve(self, comm, start, root = 0):
 		rank = comm.Get_rank()
 		size = comm.Get_size()
 
@@ -207,8 +197,6 @@ class SAGASolver :
 		self.cur_energy = self.problem.get_energy()
 		self.all_energies.append(self.cur_energy)
 
-		# self.best_energy = self.cur_energy
-		#self.best_state = self.problem.get_state()
 		self.best_solution = deepcopy(self.problem)
 
 		while(not self.problem.criteria_fulfilled(self.total_steps, self.cur_energy)):
@@ -220,37 +208,29 @@ class SAGASolver :
 			if (delta_energy < 0 or random() < exp(-delta_energy/self.cur_temp)):
 				# update current problem if new problem is accepted
 				self.cur_energy = new_candidate.get_energy()
-				self.problem = deepcopy(new_candidate)
-				
+				self.problem = deepcopy(new_candidate)				
 
-				# update best state, if new energy is lower
+				# update best solution, if new energy is lower
 				if new_candidate.get_energy() < self.best_solution.get_energy() :
 					self.best_solution = deepcopy(new_candidate)
-					#self.best_state = self.problem.get_state()
-					#self.all_energies.append(self.cur_energy)
 			
 			self.all_energies.append(self.cur_energy)
 
 			# reanneal to get new temperature
 			if self.total_steps % self.reannealing_count == 0:
 				if __PARALLEL__ == 1 :
-					#print "[",str(rank),"]: all_energies : ", self.all_energies
 
 					all_energy_sums = comm.gather(sum(self.all_energies), root)
 					all_energy_counts = comm.gather(len(self.all_energies), root)
 					baseline_energy = 0
 					if rank == 0:
 						baseline_energy = sum(all_energy_sums)/sum(all_energy_counts)
-						print "Baseline Energy: %.5f" % baseline_energy
 					baseline_energy = comm.bcast(baseline_energy, root)
 
 					fitness = 0
 					eks = [(baseline_energy - x) for x in self.all_energies if x < baseline_energy]
 					fitness = float(sum(eks))
-					# fitness = sum([(baseline_energy - x) for x in self.all_energies if x < baseline_energy])
-					print "[",str(rank),"]: Temperature = %.5f Fitness = %.5f Best Energy %.5f EK-length %d" % (self.cur_temp, fitness, self.best_solution.get_energy(), len(eks))
-					#print "[",str(rank),"]: Energies: ", self.all_energies
-
+					
 					all_temps = [0] * size
 					all_fitness = [0] * size
 
@@ -275,13 +255,43 @@ class SAGASolver :
 				else:
 					self.cur_temp *= 0.9
 					if self.cur_temp < 1 : self.cur_temp = sqrt(self.max_temp)
-					print "[",str(rank),"]: @%.5f - Temperature = %.5f Best Energy %.5f " % (self.total_steps, self.cur_temp, self.best_solution.get_energy())
 
-			# update varaibles
+			# update counter
 			self.total_steps += 1
 
-		#if rank == 0:
-		print self.best_solution.print_results()
-		comm.Abort()
-		#print "[",str(rank),"]: Final Energy : ", self.best_energy
+		# Print the results and exit if one process 
+		# exited loop before others
+		if self.best_solution.get_energy() == 0: 
+			# print "[",rank,"]: Got best energy of 0!"
+			self.best_solution.print_results()
+			stop = MPI.Wtime()
+			print "Running time: %.5f" % (stop - start)
+			print "EXITING! Don't worry!"
+			comm.Abort()
 
+		# Else choose the best solution and exit
+		else : 
+			if rank == 0:
+				solutions = []
+				solutions.append(self.best_solution)
+
+				# Get results from all other processes
+				for i in range(size-1):
+					status = MPI.Status()
+					solution = comm.recv(source=MPI.ANY_SOURCE,tag=MPI.ANY_TAG,status=status)
+					solutions.append(solution)
+
+				# Print the best solution
+				best_energy = solutions[0].get_energy()
+				best_solution = deepcopy(solutions[0])
+				for solution in solutions:
+					if best_energy > solution.get_energy():
+						best_energy = solution.get_energy()
+						best_solution = deepcopy(solution)
+
+				best_solution.print_results()
+				stop = MPI.Wtime()
+				print "Running time: %.5f" % (stop - start)
+			else :
+				comm.send(self.best_solution, dest = 0)
+				return

@@ -103,7 +103,7 @@ class SAGASudokuProblem(SAGAProblem):
             if i % N_sqrt == 0:
                 result += " "
             result += str(self._data[i])
-        print result
+        print result, "\n with energy = ", self.get_energy()
 
     def get_size(self):
         return self._N
