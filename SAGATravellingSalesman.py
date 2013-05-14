@@ -22,7 +22,7 @@ class SAGATravellingSalesman(SAGAProblem):
 		self._num_cities = len(dist_mat)
 		self._route = deepcopy(route)
 		self._energy = 0
-		self._max_iterations = 160 * 20 * self._num_cities
+		self._max_iterations = 160 * 2 * self._num_cities
 
 	"""
 	Calculates the energy of the SAGAProblem
