@@ -5,6 +5,7 @@ from random import shuffle, random, sample, randint
 from copy import deepcopy
 from math import exp, sqrt
 from math import sqrt
+import time
 
 
 if __name__ == "__main__":
@@ -35,11 +36,13 @@ if __name__ == "__main__":
     T = 0.5
     count = 0
     
+    start = time.time()
+
     while (count < 400000):
         try:
-            if (count % 1000 == 0): 
-                print "Iteration %s,    \tT = %.5f, \tbest_score = %s, \tcurrent_score = %s"%(count, T, 
-                                                               best_score, current_score)
+            # if (count % 1000 == 0): 
+                # print "Iteration %s,    \tT = %.5f, \tbest_score = %s, \tcurrent_score = %s"%(count, T, 
+                                                               # best_score, current_score)
             SP_candidate = SP.generate_candidate(1)
             candidate_score = SP_candidate.get_energy()
             delta_S = float(current_score - candidate_score)
@@ -62,6 +65,8 @@ if __name__ == "__main__":
             print "Hit an inexplicable numerical error. It's a random algorithm-- try again."            
     if best_score == 0:
         print "\nSOLVED THE PUZZLE."
+        stop = time.time()
+        print "Time taken : %.5f" %(stop-start)
     else:
         print "\nDIDN'T SOLVE. (%s/%s points). It's a random algorithm-- try again."%(best_score,-162)
     print "\nFinal Puzzle:"

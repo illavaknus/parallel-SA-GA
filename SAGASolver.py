@@ -255,6 +255,7 @@ class SAGASolver :
 				else:
 					self.cur_temp *= 0.9
 					if self.cur_temp < 1 : self.cur_temp = sqrt(self.max_temp)
+				# print "[",rank,"]: new temp = %.5f with Energy = %.5f" % (self.cur_temp, self.best_solution.get_energy())
 
 			# update counter
 			self.total_steps += 1
